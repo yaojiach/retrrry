@@ -13,8 +13,6 @@ def unreliable_func():
         raise IOError('Fail')
     else:
         return 'Success'
-
-print unreliable_func()
 ```
 
 ## Configurations
