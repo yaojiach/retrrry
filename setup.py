@@ -3,7 +3,7 @@ import sys
 from setuptools import setup
 
 
-VERSION = '1.0.0'
+VERSION = '1.0.1'
 CLASSIFIERS = [
     'License :: OSI Approved :: Apache Software License',
     'Programming Language :: Python',
