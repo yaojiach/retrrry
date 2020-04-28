@@ -136,8 +136,7 @@ class Retrrry:
             # this allows for providing a tuple of exception types that should be allowed to retry
             # on, and avoids having to create a callback that does the same thing
             if isinstance(retry_on_exception, (tuple)):
-                retry_on_exception = _retry_if_exception_of_type(
-                    retry_on_exception)
+                retry_on_exception = _retry_if_exception_of_type(retry_on_exception)
             self._retry_on_exception = retry_on_exception
 
         # retry on result filter
@@ -202,7 +201,7 @@ class Retrrry:
             reject = reject | self._retry_on_result(attempt.value)
         return reject
 
-    def call(self, fn, *args, **kwargs):
+    def call(self, f, *args, **kwds):
         start_time = int(round(time.time() * 1000))
         attempt_number = 1
         while True:
@@ -210,7 +209,7 @@ class Retrrry:
                 self._before_attempts(attempt_number)
 
             try:
-                attempt = Attempt(fn(*args, **kwargs), attempt_number, False)
+                attempt = Attempt(f(*args, **kwds), attempt_number, False)
             except:
                 tb = sys.exc_info()
                 attempt = Attempt(tb, attempt_number, True)
