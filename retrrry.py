@@ -156,11 +156,6 @@ class Retrrry:
         """Stop after the time from the first attempt >= stop_max_delay."""
         return delay_since_first_attempt_ms >= self._stop_max_delay
 
-    @staticmethod
-    def no_sleep(previous_attempt_number, delay_since_first_attempt_ms):
-        """Don't sleep at all before retrying."""
-        return 0
-
     def fixed_sleep(self, previous_attempt_number, delay_since_first_attempt_ms):
         """Sleep a fixed amount of time between each retry."""
         return self._wait_fixed
