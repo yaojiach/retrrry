@@ -41,6 +41,10 @@ def _retry_if_exception_of_type(retryable_types):
     return _retry_if_exception_these_types
 
 
+def _current_time_ms():
+    return int(round(time.time() * 1000))
+
+
 def retry(_f=None, **dkwds):
     """Decorator function that instantiates the Retrrry object."""
     def decorator(f):
@@ -156,34 +160,21 @@ class Retrrry:
         return delay_since_first_attempt_ms >= self._stop_max_delay
 
     def fixed_sleep(self, previous_attempt_number, delay_since_first_attempt_ms):
-        """Sleep a fixed amount of time between each retry."""
         return self._wait_fixed
 
     def random_sleep(self, previous_attempt_number, delay_since_first_attempt_ms):
-        """Sleep a random amount of time between wait_random_min and wait_random_max."""
         return random.randint(self._wait_random_min, self._wait_random_max)
 
     def incrementing_sleep(self, previous_attempt_number, delay_since_first_attempt_ms):
-        """
-        Sleep an incremental amount of time after each attempt, starting at wait_incrementing_start
-        and incrementing by wait_incrementing_increment.
-        """
         result = self._wait_incrementing_start + \
             (self._wait_incrementing_increment * (previous_attempt_number - 1))
-        if result > self._wait_incrementing_max:
-            result = self._wait_incrementing_max
-        if result < 0:
-            result = 0
-        return result
+        result = min(result, self._wait_incrementing_max)
+        return result if result > 0 else 0
 
     def exponential_sleep(self, previous_attempt_number, delay_since_first_attempt_ms):
-        exp = 2 ** previous_attempt_number
-        result = self._wait_exponential_multiplier * exp
-        if result > self._wait_exponential_max:
-            result = self._wait_exponential_max
-        if result < 0:
-            result = 0
-        return result
+        result = self._wait_exponential_multiplier * (2 ** previous_attempt_number)
+        result = min(result, self._wait_exponential_max)
+        return result if result > 0 else 0
 
     @staticmethod
     def never_reject(result):
@@ -194,15 +185,11 @@ class Retrrry:
         return True
 
     def should_reject(self, attempt):
-        reject = False
-        if attempt.has_exception:
-            reject = reject | self._retry_on_exception(attempt.value[1])
-        else:
-            reject = reject | self._retry_on_result(attempt.value)
-        return reject
+        return self._retry_on_exception(attempt.value[1]) \
+            if attempt.has_exception else self._retry_on_result(attempt.value)
 
     def call(self, f, *args, **kwds):
-        start_time = int(round(time.time() * 1000))
+        start_time_ms = _current_time_ms()
         attempt_number = 1
         while True:
             if self._before_attempts:
@@ -220,7 +207,7 @@ class Retrrry:
             if self._after_attempts:
                 self._after_attempts(attempt_number)
 
-            delay_since_first_attempt_ms = int(round(time.time() * 1000)) - start_time
+            delay_since_first_attempt_ms = _current_time_ms() - start_time_ms
             if self.stop(attempt_number, delay_since_first_attempt_ms):
                 if not self._wrap_exception and attempt.has_exception:
                     # attempt.get() with an exception should cause raise, but raise just in case
@@ -228,11 +215,11 @@ class Retrrry:
                 else:
                     raise RetryError(attempt)
             else:
-                sleep = self.wait(attempt_number, delay_since_first_attempt_ms)
+                sleep_ms = self.wait(attempt_number, delay_since_first_attempt_ms)
                 if self._wait_jitter_max:
                     jitter = random.random() * self._wait_jitter_max
-                    sleep = sleep + max(0, jitter)
-                time.sleep(sleep / 1000.0)
+                    sleep_ms = sleep_ms + max(0, jitter)
+                time.sleep(sleep_ms / 1000.0)
 
             attempt_number = attempt_number + 1
 
