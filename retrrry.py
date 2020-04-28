@@ -42,7 +42,7 @@ def _retry_if_exception_of_type(retryable_types):
 
 
 def retry(_f=None, **dkwds):
-    """Decorator function that instantiates the Retrying object"""
+    """Decorator function that instantiates the Retrrry object."""
     def decorator(f):
         @wraps(f)
         def wrapper(*args, **kwds):
@@ -55,7 +55,7 @@ def retry(_f=None, **dkwds):
         return decorator(_f)
 
 
-class Retrrry(object):
+class Retrrry:
     def __init__(
         self,
         stop=None,
@@ -79,7 +79,6 @@ class Retrrry(object):
         before_attempts=None,
         after_attempts=None
     ):
-
         self._stop_max_attempt_number = 5 if stop_max_attempt_number is None else stop_max_attempt_number
         self._stop_max_delay = 100 if stop_max_delay is None else stop_max_delay
         self._wait_fixed = 1000 if wait_fixed is None else wait_fixed
@@ -94,7 +93,6 @@ class Retrrry(object):
         self._before_attempts = before_attempts
         self._after_attempts = after_attempts
 
-        # TODO add chaining of stop behaviors
         # stop behavior
         stop_funcs = []
         if stop_max_attempt_number is not None:
@@ -105,14 +103,11 @@ class Retrrry(object):
 
         if stop_func is not None:
             self.stop = stop_func
-
         elif stop is None:
             self.stop = lambda attempts, delay: any(f(attempts, delay) for f in stop_funcs)
-
         else:
             self.stop = getattr(self, stop)
 
-        # TODO add chaining of wait behaviors
         # wait behavior
         wait_funcs = [lambda *args, **kwargs: 0]
         if wait_fixed is not None:
@@ -129,10 +124,8 @@ class Retrrry(object):
 
         if wait_func is not None:
             self.wait = wait_func
-
         elif wait is None:
             self.wait = lambda attempts, delay: max(f(attempts, delay) for f in wait_funcs)
-
         else:
             self.wait = getattr(self, wait)
 
@@ -140,9 +133,8 @@ class Retrrry(object):
         if retry_on_exception is None:
             self._retry_on_exception = self.always_reject
         else:
-            # this allows for providing a tuple of exception types that
-            # should be allowed to retry on, and avoids having to create
-            # a callback that does the same thing
+            # this allows for providing a tuple of exception types that should be allowed to retry
+            # on, and avoids having to create a callback that does the same thing
             if isinstance(retry_on_exception, (tuple)):
                 retry_on_exception = _retry_if_exception_of_type(
                     retry_on_exception)
@@ -174,13 +166,13 @@ class Retrrry(object):
         return self._wait_fixed
 
     def random_sleep(self, previous_attempt_number, delay_since_first_attempt_ms):
-        """Sleep a random amount of time between wait_random_min and wait_random_max"""
+        """Sleep a random amount of time between wait_random_min and wait_random_max."""
         return random.randint(self._wait_random_min, self._wait_random_max)
 
     def incrementing_sleep(self, previous_attempt_number, delay_since_first_attempt_ms):
         """
-        Sleep an incremental amount of time after each attempt, starting at
-        wait_incrementing_start and incrementing by wait_incrementing_increment
+        Sleep an incremental amount of time after each attempt, starting at wait_incrementing_start
+        and incrementing by wait_incrementing_increment.
         """
         result = self._wait_incrementing_start + \
             (self._wait_incrementing_increment * (previous_attempt_number - 1))
@@ -210,10 +202,9 @@ class Retrrry(object):
     def should_reject(self, attempt):
         reject = False
         if attempt.has_exception:
-            reject |= self._retry_on_exception(attempt.value[1])
+            reject = reject | self._retry_on_exception(attempt.value[1])
         else:
-            reject |= self._retry_on_result(attempt.value)
-
+            reject = reject | self._retry_on_result(attempt.value)
         return reject
 
     def call(self, fn, *args, **kwargs):
@@ -238,7 +229,7 @@ class Retrrry(object):
             delay_since_first_attempt_ms = int(round(time.time() * 1000)) - start_time
             if self.stop(attempt_number, delay_since_first_attempt_ms):
                 if not self._wrap_exception and attempt.has_exception:
-                    # get() on an attempt with an exception should cause it to be raised, but raise just in case
+                    # attempt.get() with an exception should cause raise, but raise just in case
                     raise attempt.get()
                 else:
                     raise RetryError(attempt)
@@ -249,16 +240,14 @@ class Retrrry(object):
                     sleep = sleep + max(0, jitter)
                 time.sleep(sleep / 1000.0)
 
-            attempt_number += 1
+            attempt_number = attempt_number + 1
 
 
-class Attempt(object):
+class Attempt:
     """
-    An Attempt encapsulates a call to a target function that may end as a
-    normal return value from the function or an Exception depending on what
-    occurred during the execution.
+    An Attempt encapsulates a call to a target function that may end as a normal return value from 
+    the function or an Exception depending on what occurred during the execution.
     """
-
     def __init__(self, value, attempt_number, has_exception):
         self.value = value
         self.attempt_number = attempt_number
@@ -266,9 +255,8 @@ class Attempt(object):
 
     def get(self, wrap_exception=False):
         """
-        Return the return value of this Attempt instance or raise an Exception.
-        If wrap_exception is true, this Attempt is wrapped inside of a
-        RetryError before being raised.
+        Return the return value of this Attempt instance or raise an Exception. If wrap_exception is
+        true, this Attempt is wrapped inside of a RetryError before being raised.
         """
         if self.has_exception:
             if wrap_exception:
@@ -286,10 +274,7 @@ class Attempt(object):
 
 
 class RetryError(Exception):
-    """
-    A RetryError encapsulates the last Attempt instance right before giving up.
-    """
-
+    """A RetryError encapsulates the last Attempt instance right before giving up."""
     def __init__(self, last_attempt):
         self.last_attempt = last_attempt
 
