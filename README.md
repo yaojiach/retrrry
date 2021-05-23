@@ -2,7 +2,7 @@
 
 Decorate flaky functions with `@retry` to apply retrying logic.
 
-Simplest way to use `Retrrry` is actually to copy the code in `retrrry.py` and use it in your
+Simplest way to use `retrrry` is actually to copy the code in `retry.py` and use it in your
 project, since there is no dependencies other than the standard library.
 
 ```python
@@ -40,6 +40,7 @@ The default behavior is to retry forever without waiting:
 @retry
 def never_stop_never_wait():
     print('Retry forever, ignore Exceptions, no wait between retries')
+    raise Exception
 ```
 
 Set the number of attempts before giving up:
@@ -48,6 +49,7 @@ Set the number of attempts before giving up:
 @retry(stop_max_attempt_number=7)
 def stop_after_7_attempts():
     print('Stopping after 7 attempts')
+    raise Exception
 ```
 
 Set a boundary for time for retry:
@@ -56,6 +58,7 @@ Set a boundary for time for retry:
 @retry(stop_max_delay=10000)
 def stop_after_10_s():
     print('Stopping after 10 seconds')
+    raise Exception
 ```
 
 Set wait time between retries:
@@ -64,6 +67,7 @@ Set wait time between retries:
 @retry(wait_fixed=2000)
 def wait_2_seconds():
     print('Wait 2 second between retries')
+    raise Exception
 ```
 
 Inject some randomness:
@@ -72,6 +76,7 @@ Inject some randomness:
 @retry(wait_random_min=1000, wait_random_max=2000)
 def wait_1_to_2_seconds():
     print('Randomly wait 1 to 2 seconds between retries')
+    raise Exception
 ```
 
 Use exponential backoff:
@@ -82,6 +87,7 @@ def wait_exponential_1000():
     print(
         'Wait 2^i * 1000 milliseconds after ith retry, up to 10 seconds, then 10 seconds afterwards'
     )
+    raise Exception
 ```
 
 Deal with specific exceptions:
@@ -93,10 +99,12 @@ def retry_if_io_error(exception):
 @retry(retry_on_exception=retry_if_io_error)
 def might_have_io_error():
     print('Retry if an IOError occurs, raise any other errors')
+    raise Exception
 
 @retry(retry_on_exception=retry_if_io_error, wrap_exception=True)
 def might_have_io_error_raise_retry_error():
     print('Retry if an IOError occurs, raise any other errors wrapped in RetryError')
+    raise Exception
 ```
 
 Alter the behavior of retry based on a function return value:
@@ -108,11 +116,19 @@ def retry_if_result_none(result):
 @retry(retry_on_result=retry_if_result_none)
 def might_return_none():
     print('Retry if return value is None')
+    import random
+    if random.randint(0, 10) > 1:
+        return None
+    return 'Done'
 
 # Or retry if result is equal to 1
-@retry(retry_on_result=lambda x: x ==1)
-def might_return_none():
+@retry(retry_on_result=lambda res: res == 1)
+def might_return_one():
     print('Retry if return value is 1')
+    import random
+    if random.randint(0, 10) > 1:
+        return 1
+    return 0
 ```
 
 Finally, we can always combine all of the configurations.

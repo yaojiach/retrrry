@@ -23,7 +23,7 @@ from functools import wraps
 MAX_WAIT = 1073741823
 
 
-def reraise(tp, value, tb=None):
+def _reraise(tp, value, tb=None):
     try:
         if value is None:
             value = tp()
@@ -38,6 +38,7 @@ def reraise(tp, value, tb=None):
 def _retry_if_exception_of_type(retryable_types):
     def _retry_if_exception_these_types(exception):
         return isinstance(exception, retryable_types)
+
     return _retry_if_exception_these_types
 
 
@@ -46,11 +47,13 @@ def _current_time_ms():
 
 
 def retry(_f=None, **dkwds):
-    """Decorator function that instantiates the Retrrry object."""
+    """Decorator function that instantiates the Retry object."""
+
     def decorator(f):
         @wraps(f)
         def wrapper(*args, **kwds):
-            return Retrrry(**dkwds).call(f, *args, **kwds)
+            return Retry(**dkwds).call(f, *args, **kwds)
+
         return wrapper
 
     if _f is None:
@@ -59,7 +62,7 @@ def retry(_f=None, **dkwds):
         return decorator(_f)
 
 
-class Retrrry:
+class Retry:
     def __init__(
         self,
         stop=None,
@@ -81,18 +84,30 @@ class Retrrry:
         wait_func=None,
         wait_jitter_max=None,
         before_attempts=None,
-        after_attempts=None
+        after_attempts=None,
     ):
-        self._stop_max_attempt_number = 5 if stop_max_attempt_number is None else stop_max_attempt_number
+        self._stop_max_attempt_number = (
+            5 if stop_max_attempt_number is None else stop_max_attempt_number
+        )
         self._stop_max_delay = 100 if stop_max_delay is None else stop_max_delay
         self._wait_fixed = 1000 if wait_fixed is None else wait_fixed
         self._wait_random_min = 0 if wait_random_min is None else wait_random_min
         self._wait_random_max = 1000 if wait_random_max is None else wait_random_max
-        self._wait_incrementing_start = 0 if wait_incrementing_start is None else wait_incrementing_start
-        self._wait_incrementing_increment = 100 if wait_incrementing_increment is None else wait_incrementing_increment
-        self._wait_exponential_multiplier = 1 if wait_exponential_multiplier is None else wait_exponential_multiplier
-        self._wait_exponential_max = MAX_WAIT if wait_exponential_max is None else wait_exponential_max
-        self._wait_incrementing_max = MAX_WAIT if wait_incrementing_max is None else wait_incrementing_max
+        self._wait_incrementing_start = (
+            0 if wait_incrementing_start is None else wait_incrementing_start
+        )
+        self._wait_incrementing_increment = (
+            100 if wait_incrementing_increment is None else wait_incrementing_increment
+        )
+        self._wait_exponential_multiplier = (
+            1 if wait_exponential_multiplier is None else wait_exponential_multiplier
+        )
+        self._wait_exponential_max = (
+            MAX_WAIT if wait_exponential_max is None else wait_exponential_max
+        )
+        self._wait_incrementing_max = (
+            MAX_WAIT if wait_incrementing_max is None else wait_incrementing_max
+        )
         self._wait_jitter_max = 0 if wait_jitter_max is None else wait_jitter_max
         self._before_attempts = before_attempts
         self._after_attempts = after_attempts
@@ -108,28 +123,35 @@ class Retrrry:
         if stop_func is not None:
             self.stop = stop_func
         elif stop is None:
-            self.stop = lambda attempts, delay: any(f(attempts, delay) for f in stop_funcs)
+            self.stop = lambda attempts, delay: any(
+                f(attempts, delay) for f in stop_funcs
+            )
         else:
             self.stop = getattr(self, stop)
 
         # wait behavior
         wait_funcs = [lambda *args, **kwargs: 0]
         if wait_fixed is not None:
-            wait_funcs.append(self.fixed_sleep)
+            wait_funcs.append(self.fixed_sleep)  # type: ignore
 
         if wait_random_min is not None or wait_random_max is not None:
-            wait_funcs.append(self.random_sleep)
+            wait_funcs.append(self.random_sleep)  # type: ignore
 
-        if wait_incrementing_start is not None or wait_incrementing_increment is not None:
-            wait_funcs.append(self.incrementing_sleep)
+        if (
+            wait_incrementing_start is not None
+            or wait_incrementing_increment is not None
+        ):
+            wait_funcs.append(self.incrementing_sleep)  # type: ignore
 
         if wait_exponential_multiplier is not None or wait_exponential_max is not None:
-            wait_funcs.append(self.exponential_sleep)
+            wait_funcs.append(self.exponential_sleep)  # type: ignore
 
         if wait_func is not None:
             self.wait = wait_func
         elif wait is None:
-            self.wait = lambda attempts, delay: max(f(attempts, delay) for f in wait_funcs)
+            self.wait = lambda attempts, delay: max(
+                f(attempts, delay) for f in wait_funcs
+            )
         else:
             self.wait = getattr(self, wait)
 
@@ -166,8 +188,9 @@ class Retrrry:
         return random.randint(self._wait_random_min, self._wait_random_max)
 
     def incrementing_sleep(self, previous_attempt_number, delay_since_first_attempt_ms):
-        result = self._wait_incrementing_start + \
-            (self._wait_incrementing_increment * (previous_attempt_number - 1))
+        result = self._wait_incrementing_start + (
+            self._wait_incrementing_increment * (previous_attempt_number - 1)
+        )
         result = min(result, self._wait_incrementing_max)
         return result if result > 0 else 0
 
@@ -185,8 +208,11 @@ class Retrrry:
         return True
 
     def should_reject(self, attempt):
-        return self._retry_on_exception(attempt.value[1]) \
-            if attempt.has_exception else self._retry_on_result(attempt.value)
+        return (
+            self._retry_on_exception(attempt.value[1])
+            if attempt.has_exception
+            else self._retry_on_result(attempt.value)
+        )
 
     def call(self, f, *args, **kwds):
         start_time_ms = _current_time_ms()
@@ -226,9 +252,10 @@ class Retrrry:
 
 class Attempt:
     """
-    An Attempt encapsulates a call to a target function that may end as a normal return value from 
+    An Attempt encapsulates a call to a target function that may end as a normal return value from
     the function or an Exception depending on what occurred during the execution.
     """
+
     def __init__(self, value, attempt_number, has_exception):
         self.value = value
         self.attempt_number = attempt_number
@@ -243,7 +270,7 @@ class Attempt:
             if wrap_exception:
                 raise RetryError(self)
             else:
-                reraise(self.value[0], self.value[1], self.value[2])
+                _reraise(self.value[0], self.value[1], self.value[2])
         else:
             return self.value
 
@@ -251,13 +278,14 @@ class Attempt:
         if self.has_exception:
             return f'Attempts: {self.attempt_number}, Error:\n{"".join(traceback.format_tb(self.value[2]))}'
         else:
-            return f'Attempts: {self.attempt_number}, Value: {self.value}'
+            return f"Attempts: {self.attempt_number}, Value: {self.value}"
 
 
 class RetryError(Exception):
     """A RetryError encapsulates the last Attempt instance right before giving up."""
+
     def __init__(self, last_attempt):
         self.last_attempt = last_attempt
 
     def __str__(self):
-        return f'RetryError[{self.last_attempt}]'
+        return f"RetryError[{self.last_attempt}]"
