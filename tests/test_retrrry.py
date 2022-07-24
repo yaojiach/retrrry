@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 # Stop Conditions
 
+
 def test_never_stop():
     r = Retry()
     assert not r.stop(3, 6546)

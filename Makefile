@@ -1,9 +1,9 @@
 test:
-	pipenv run pytest -o log_cli=true --log-cli-level=DEBUG tests.py 
+	poetry run pytest -o log_cli=true --log-cli-level=DEBUG
 
-package:
-	rm -rf dist
-	pipenv run python setup.py sdist bdist_wheel
+build:
+	rm -r dist
+	poetry build
 
 release:
-	pipenv run python -m twine upload dist/*
+	poetry publish

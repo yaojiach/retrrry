@@ -195,7 +195,7 @@ class Retry:
         return result if result > 0 else 0
 
     def exponential_sleep(self, previous_attempt_number, delay_since_first_attempt_ms):
-        result = self._wait_exponential_multiplier * (2 ** previous_attempt_number)
+        result = self._wait_exponential_multiplier * (2**previous_attempt_number)
         result = min(result, self._wait_exponential_max)
         return result if result > 0 else 0
 
@@ -237,7 +237,7 @@ class Retry:
             if self.stop(attempt_number, delay_since_first_attempt_ms):
                 if not self._wrap_exception and attempt.has_exception:
                     # attempt.get() with an exception should cause raise, but raise just in case
-                    raise attempt.get()
+                    raise attempt.get()  # type: ignore
                 else:
                     raise RetryError(attempt)
             else:

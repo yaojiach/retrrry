@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "retrrry"
+version = "3.0.5"
+description = "Retry for Python3. No dependency."
+authors = ["JC <jc@jucyai.com>"]
+readme = "README.md"
+repository = "https://github.com/yaojiach/retrrry"
+license = "Apache-2.0"
+
+[tool.poetry.dependencies]
+python = "^3.6"
+
+[tool.poetry.dev-dependencies]
+pytest = "^7.1.2"
+black = { version = "^22.6.0", allow-prereleases = true }
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
