@@ -13,17 +13,38 @@
 ## See the License for the specific language governing permissions and
 ## limitations under the License.
 
+from __future__ import annotations
+
 import random
 import sys
 import time
 import traceback
 from functools import wraps
-
+from math import pow
+from types import TracebackType
+from typing import (
+    Any,
+    Callable,
+    Optional,
+    ParamSpec,
+    Type,
+    TypeAlias,
+    TypeVar,
+    Union,
+    cast,
+)
 
 MAX_WAIT = 1073741823
+ExceptionInfo: TypeAlias = Union[
+    tuple[Type[BaseException], BaseException, TracebackType], tuple[None, None, None]
+]
 
 
-def _reraise(tp, value, tb=None):
+def _reraise(
+    tp: Type[BaseException],
+    value: Optional[BaseException],
+    tb: Optional[TracebackType],
+) -> None:
     try:
         if value is None:
             value = tp()
@@ -35,24 +56,34 @@ def _reraise(tp, value, tb=None):
         tb = None
 
 
-def _retry_if_exception_of_type(retryable_types):
-    def _retry_if_exception_these_types(exception):
+def _retry_if_exception_of_type(
+    retryable_types: tuple[type],
+) -> Callable[[Optional[BaseException]], bool]:
+    def _retry_if_exception_these_types(exception: Optional[BaseException]) -> bool:
         return isinstance(exception, retryable_types)
 
     return _retry_if_exception_these_types
 
 
-def _current_time_ms():
+def _current_time_ms() -> int:
     return int(round(time.time() * 1000))
 
 
-def retry(_f=None, **dkwds):
+Params = ParamSpec("Params")
+ReturnType = TypeVar("ReturnType")
+
+
+def retry(  # type: ignore[misc]
+    _f: Optional[Callable[Params, ReturnType]] = None, **dkwds: Any
+) -> Callable[[Callable[Params, ReturnType]], Callable[Params, ReturnType]] | Callable[
+    Params, ReturnType
+]:
     """Decorator function that instantiates the Retry object."""
 
-    def decorator(f):
+    def decorator(f: Callable[Params, ReturnType]) -> Callable[Params, ReturnType]:
         @wraps(f)
-        def wrapper(*args, **kwds):
-            return Retry(**dkwds).call(f, *args, **kwds)
+        def wrapper(*args: Params.args, **kwds: Params.kwargs) -> ReturnType:
+            return Retry(**dkwds).call(f, *args, **kwds)  # type: ignore[misc]
 
         return wrapper
 
@@ -65,26 +96,28 @@ def retry(_f=None, **dkwds):
 class Retry:
     def __init__(
         self,
-        stop=None,
-        wait=None,
-        stop_max_attempt_number=None,
-        stop_max_delay=None,
-        wait_fixed=None,
-        wait_random_min=None,
-        wait_random_max=None,
-        wait_incrementing_start=None,
-        wait_incrementing_increment=None,
-        wait_incrementing_max=None,
-        wait_exponential_multiplier=None,
-        wait_exponential_max=None,
-        retry_on_exception=None,
-        retry_on_result=None,
-        wrap_exception=False,
-        stop_func=None,
-        wait_func=None,
-        wait_jitter_max=None,
-        before_attempts=None,
-        after_attempts=None,
+        stop: Optional[str] = None,
+        wait: Optional[str] = None,
+        stop_max_attempt_number: Optional[int] = None,
+        stop_max_delay: Optional[int] = None,
+        wait_fixed: Optional[int] = None,
+        wait_random_min: Optional[int] = None,
+        wait_random_max: Optional[int] = None,
+        wait_incrementing_start: Optional[int] = None,
+        wait_incrementing_increment: Optional[int] = None,
+        wait_incrementing_max: Optional[int] = None,
+        wait_exponential_multiplier: Optional[int] = None,
+        wait_exponential_max: Optional[int] = None,
+        retry_on_exception: Optional[
+            Callable[[Optional[BaseException]], bool] | tuple[type]
+        ] = None,
+        retry_on_result: Optional[Callable[[ExceptionInfo | ReturnType], bool]] = None,
+        wrap_exception: bool = False,
+        stop_func: Optional[Callable[[int, int], bool]] = None,
+        wait_func: Optional[Callable[[int, int], float]] = None,
+        wait_jitter_max: Optional[int] = None,
+        before_attempts: Optional[Callable[[int], None]] = None,
+        after_attempts: Optional[Callable[[int], None]] = None,
     ):
         self._stop_max_attempt_number = (
             5 if stop_max_attempt_number is None else stop_max_attempt_number
@@ -129,22 +162,25 @@ class Retry:
         else:
             self.stop = getattr(self, stop)
 
+        def _wait_function(a: int, b: int, /) -> int:
+            return 0
+
         # wait behavior
-        wait_funcs = [lambda *args, **kwargs: 0]
+        wait_funcs = [_wait_function]
         if wait_fixed is not None:
-            wait_funcs.append(self.fixed_sleep)  # type: ignore
+            wait_funcs.append(self.fixed_sleep)
 
         if wait_random_min is not None or wait_random_max is not None:
-            wait_funcs.append(self.random_sleep)  # type: ignore
+            wait_funcs.append(self.random_sleep)
 
         if (
             wait_incrementing_start is not None
             or wait_incrementing_increment is not None
         ):
-            wait_funcs.append(self.incrementing_sleep)  # type: ignore
+            wait_funcs.append(self.incrementing_sleep)
 
         if wait_exponential_multiplier is not None or wait_exponential_max is not None:
-            wait_funcs.append(self.exponential_sleep)  # type: ignore
+            wait_funcs.append(self.exponential_sleep)
 
         if wait_func is not None:
             self.wait = wait_func
@@ -173,48 +209,67 @@ class Retry:
 
         self._wrap_exception = wrap_exception
 
-    def stop_after_attempt(self, previous_attempt_number, delay_since_first_attempt_ms):
+    def stop_after_attempt(
+        self, previous_attempt_number: int, delay_since_first_attempt_ms: int
+    ) -> bool:
         """Stop after the previous attempt >= stop_max_attempt_number."""
         return previous_attempt_number >= self._stop_max_attempt_number
 
-    def stop_after_delay(self, previous_attempt_number, delay_since_first_attempt_ms):
+    def stop_after_delay(
+        self, previous_attempt_number: int, delay_since_first_attempt_ms: int
+    ) -> bool:
         """Stop after the time from the first attempt >= stop_max_delay."""
         return delay_since_first_attempt_ms >= self._stop_max_delay
 
-    def fixed_sleep(self, previous_attempt_number, delay_since_first_attempt_ms):
+    def fixed_sleep(
+        self, previous_attempt_number: int, delay_since_first_attempt_ms: int
+    ) -> int:
         return self._wait_fixed
 
-    def random_sleep(self, previous_attempt_number, delay_since_first_attempt_ms):
+    def random_sleep(
+        self, previous_attempt_number: int, delay_since_first_attempt_ms: int
+    ) -> int:
         return random.randint(self._wait_random_min, self._wait_random_max)
 
-    def incrementing_sleep(self, previous_attempt_number, delay_since_first_attempt_ms):
+    def incrementing_sleep(
+        self, previous_attempt_number: int, delay_since_first_attempt_ms: int
+    ) -> int:
         result = self._wait_incrementing_start + (
             self._wait_incrementing_increment * (previous_attempt_number - 1)
         )
         result = min(result, self._wait_incrementing_max)
         return result if result > 0 else 0
 
-    def exponential_sleep(self, previous_attempt_number, delay_since_first_attempt_ms):
-        result = self._wait_exponential_multiplier * (2**previous_attempt_number)
+    def exponential_sleep(
+        self, previous_attempt_number: int, delay_since_first_attempt_ms: int
+    ) -> int:
+        result = self._wait_exponential_multiplier * int(
+            pow(2, previous_attempt_number)
+        )
         result = min(result, self._wait_exponential_max)
         return result if result > 0 else 0
 
     @staticmethod
-    def never_reject(result):
+    def never_reject(result: ExceptionInfo | ReturnType, /) -> bool:
         return False
 
     @staticmethod
-    def always_reject(result):
+    def always_reject(result: Optional[BaseException], /) -> bool:
         return True
 
-    def should_reject(self, attempt):
+    def should_reject(self, attempt: Attempt) -> bool:
         return (
-            self._retry_on_exception(attempt.value[1])
-            if attempt.has_exception
-            else self._retry_on_result(attempt.value)
+            self._retry_on_exception(attempt.exception_info[1])
+            if attempt.exception_info
+            else self._retry_on_result(attempt.returned_value)
         )
 
-    def call(self, f, *args, **kwds):
+    def call(
+        self,
+        f: Callable[Params, ReturnType],
+        *args: Params.args,
+        **kwds: Params.kwargs,
+    ) -> ReturnType:
         start_time_ms = _current_time_ms()
         attempt_number = 1
         while True:
@@ -223,7 +278,7 @@ class Retry:
 
             try:
                 attempt = Attempt(f(*args, **kwds), attempt_number, False)
-            except:
+            except BaseException:
                 tb = sys.exc_info()
                 attempt = Attempt(tb, attempt_number, True)
 
@@ -235,9 +290,9 @@ class Retry:
 
             delay_since_first_attempt_ms = _current_time_ms() - start_time_ms
             if self.stop(attempt_number, delay_since_first_attempt_ms):
-                if not self._wrap_exception and attempt.has_exception:
+                if not self._wrap_exception and attempt.exception_info:
                     # attempt.get() with an exception should cause raise, but raise just in case
-                    raise attempt.get()  # type: ignore
+                    raise attempt.get()
                 else:
                     raise RetryError(attempt)
             else:
@@ -256,36 +311,54 @@ class Attempt:
     the function or an Exception depending on what occurred during the execution.
     """
 
-    def __init__(self, value, attempt_number, has_exception):
-        self.value = value
+    def __init__(
+        self,
+        value: ReturnType | ExceptionInfo,
+        attempt_number: int,
+        has_exception: bool,
+    ) -> None:
+        self.exception_info, self.returned_value = None, None
+        if has_exception:
+            self.exception_info = cast(ExceptionInfo, value)
+        else:
+            self.returned_value = cast(ReturnType, value)
         self.attempt_number = attempt_number
-        self.has_exception = has_exception
 
-    def get(self, wrap_exception=False):
+    def get(self, wrap_exception: bool = False) -> ReturnType:
         """
         Return the return value of this Attempt instance or raise an Exception. If wrap_exception is
         true, this Attempt is wrapped inside of a RetryError before being raised.
         """
-        if self.has_exception:
+        if self.exception_info:
             if wrap_exception:
                 raise RetryError(self)
             else:
-                _reraise(self.value[0], self.value[1], self.value[2])
-        else:
-            return self.value
+                _reraise(*self.exception_info)
 
-    def __repr__(self):
-        if self.has_exception:
-            return f'Attempts: {self.attempt_number}, Error:\n{"".join(traceback.format_tb(self.value[2]))}'
+        return self.returned_value  # type: ignore
+
+    def __repr__(self) -> str:
+        if self.exception_info:
+            return f'Attempts: {self.attempt_number}, Error:\n{"".join(traceback.format_tb(self.exception_info[2]))}'
         else:
-            return f"Attempts: {self.attempt_number}, Value: {self.value}"
+            return f"Attempts: {self.attempt_number}, Value: {self.returned_value}"
+
+    @property
+    def value(self) -> Optional[ReturnType | ExceptionInfo]:
+        # REMOVE: Left only to maintain public API
+        return self.exception_info or self.returned_value
+
+    @property
+    def has_exception(self) -> bool:
+        # REMOVE: Left only to maintain public API
+        return bool(self.exception_info)
 
 
 class RetryError(Exception):
     """A RetryError encapsulates the last Attempt instance right before giving up."""
 
-    def __init__(self, last_attempt):
+    def __init__(self, last_attempt: Attempt) -> None:
         self.last_attempt = last_attempt
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"RetryError[{self.last_attempt}]"
